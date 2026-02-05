@@ -56,7 +56,7 @@ export function AuthPage() {
             <div className="h-10 w-10 rounded-lg bg-white/20 flex items-center justify-center">
               <BarChart3 className="h-6 w-6 text-white" />
             </div>
-            <span className="text-2xl font-bold text-white">StaffTrack</span>
+            <span className="text-2xl font-bold text-white">Mintex Staffing</span>
           </div>
         </div>
         
@@ -93,7 +93,7 @@ export function AuthPage() {
         </div>
         
         <p className="text-white/60 text-sm">
-          © 2025 StaffTrack. All rights reserved.
+          © 2026 Mintex Staffing. All rights reserved.
         </p>
       </div>
 
@@ -105,7 +105,7 @@ export function AuthPage() {
               <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
                 <BarChart3 className="h-6 w-6 text-white" />
               </div>
-              <span className="text-2xl font-bold text-foreground">StaffTrack</span>
+              <span className="text-2xl font-bold text-foreground">Mintex Staffing</span>
             </div>
             <h2 className="text-2xl font-bold text-foreground">
               {isLogin ? 'Welcome back' : 'Create your account'}
