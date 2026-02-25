@@ -1,233 +1,175 @@
 import { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Pencil, Trash2, Check, X } from 'lucide-react';
-import { useCustomFields, useCreateCustomField, useUpdateCustomField, useDeleteCustomField, CustomFieldType } from '@/hooks/useCustomFields';
-import { useToast } from '@/hooks/use-toast';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { useAllCustomCharts, useCreateCustomChart, useUpdateCustomChart, useDeleteCustomChart } from '@/hooks/useCustomCharts';
+import { toast } from '@/hooks/use-toast';
+import { Plus, Trash2, BarChart3, LineChart, PieChart } from 'lucide-react';
 
-interface CustomFieldsManagerProps {
-  department: string;
-}
-
-const FIELD_TYPES: { value: CustomFieldType; label: string }[] = [
-  { value: 'text', label: 'Text' },
-  { value: 'number', label: 'Number' },
-  { value: 'currency', label: 'Currency' },
-  { value: 'percentage', label: 'Percentage' },
-  { value: 'date', label: 'Date' },
+const DATA_SOURCES = ['jobs', 'clients', 'invoices', 'payments', 'employees', 'bd_prospects', 'recruiter_activities'];
+const CHART_TYPES = [
+  { value: 'bar', label: 'Bar', icon: BarChart3 },
+  { value: 'line', label: 'Line', icon: LineChart },
+  { value: 'pie', label: 'Pie', icon: PieChart },
+  { value: 'area', label: 'Area', icon: BarChart3 },
 ];
+const AGGREGATES = ['count', 'sum', 'avg'];
 
-const MAX_CUSTOM_FIELDS = 5;
+export function CustomChartsManager() {
+  const { data: charts, isLoading } = useAllCustomCharts();
+  const createChart = useCreateCustomChart();
+  const updateChart = useUpdateCustomChart();
+  const deleteChart = useDeleteCustomChart();
 
-export function CustomFieldsManager({ department }: CustomFieldsManagerProps) {
-  const { data: fields = [], isLoading } = useCustomFields(department);
-  const createField = useCreateCustomField();
-  const updateField = useUpdateCustomField();
-  const deleteField = useDeleteCustomField();
-  const { toast } = useToast();
+  const [title, setTitle] = useState('');
+  const [chartType, setChartType] = useState('bar');
+  const [dataSource, setDataSource] = useState('jobs');
+  const [metricField, setMetricField] = useState('*');
+  const [groupBy, setGroupBy] = useState('');
+  const [aggregate, setAggregate] = useState('count');
 
-  const [isAdding, setIsAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [newFieldName, setNewFieldName] = useState('');
-  const [newFieldType, setNewFieldType] = useState<CustomFieldType>('text');
-  const [editFieldName, setEditFieldName] = useState('');
-  const [editFieldType, setEditFieldType] = useState<CustomFieldType>('text');
-
-  const canAddMore = fields.length < MAX_CUSTOM_FIELDS;
-
-  const handleAdd = async () => {
-    if (!newFieldName.trim()) {
-      toast({ title: 'Error', description: 'Field name is required', variant: 'destructive' });
-      return;
-    }
-
-    try {
-      await createField.mutateAsync({
-        department,
-        field_name: newFieldName.trim(),
-        field_type: newFieldType,
-      });
-      setNewFieldName('');
-      setNewFieldType('text');
-      setIsAdding(false);
-      toast({ title: 'Success', description: 'Custom field added' });
-    } catch {
-      toast({ title: 'Error', description: 'Failed to add custom field', variant: 'destructive' });
-    }
+  const handleCreate = () => {
+    if (!title.trim()) { toast({ title: 'Title is required', variant: 'destructive' }); return; }
+    createChart.mutate(
+      {
+        title: title.trim(),
+        chart_type: chartType,
+        data_source: dataSource,
+        metric_field: metricField || '*',
+        group_by: groupBy || null,
+        aggregate,
+        is_active: true,
+        display_order: (charts?.length || 0) + 1,
+      },
+      {
+        onSuccess: () => {
+          toast({ title: 'Chart created and pushed to dashboard' });
+          setTitle(''); setMetricField('*'); setGroupBy('');
+        },
+      }
+    );
   };
 
-  const handleEdit = async (id: string) => {
-    if (!editFieldName.trim()) {
-      toast({ title: 'Error', description: 'Field name is required', variant: 'destructive' });
-      return;
-    }
-
-    try {
-      await updateField.mutateAsync({
-        id,
-        field_name: editFieldName.trim(),
-        field_type: editFieldType,
-      });
-      setEditingId(null);
-      toast({ title: 'Success', description: 'Custom field updated' });
-    } catch {
-      toast({ title: 'Error', description: 'Failed to update custom field', variant: 'destructive' });
-    }
+  const handleToggle = (id: string, isActive: boolean) => {
+    updateChart.mutate({ id, is_active: !isActive });
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteField.mutateAsync(id);
-      toast({ title: 'Success', description: 'Custom field deleted' });
-    } catch {
-      toast({ title: 'Error', description: 'Failed to delete custom field', variant: 'destructive' });
+  const handleDelete = (id: string) => {
+    if (confirm('Delete this chart?')) {
+      deleteChart.mutate(id, { onSuccess: () => toast({ title: 'Chart deleted' }) });
     }
   };
-
-  const startEdit = (field: { id: string; field_name: string; field_type: CustomFieldType }) => {
-    setEditingId(field.id);
-    setEditFieldName(field.field_name);
-    setEditFieldType(field.field_type);
-  };
-
-  if (isLoading) {
-    return <div className="animate-pulse bg-muted h-48 rounded-lg" />;
-  }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle className="text-lg">Custom Fields for {department}s</CardTitle>
-          <p className="text-sm text-muted-foreground mt-1">
-            {fields.length}/{MAX_CUSTOM_FIELDS} custom fields
-          </p>
-        </div>
-        {canAddMore && !isAdding && (
-          <Button size="sm" onClick={() => setIsAdding(true)}>
-            <Plus className="h-4 w-4 mr-1" />
-            Add Field
+    <div className="space-y-6">
+      <Card className="border-dashed">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Plus className="h-4 w-4" /> Create Custom Chart
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Title *</Label>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Jobs by Status" className="h-8 text-xs" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Chart Type</Label>
+              <Select value={chartType} onValueChange={setChartType}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CHART_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Data Source</Label>
+              <Select value={dataSource} onValueChange={setDataSource}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {DATA_SOURCES.map((s) => (
+                    <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Metric Field</Label>
+              <Input value={metricField} onChange={(e) => setMetricField(e.target.value)} placeholder="* for count, or column name" className="h-8 text-xs" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Group By (optional)</Label>
+              <Input value={groupBy} onChange={(e) => setGroupBy(e.target.value)} placeholder="e.g. status, priority" className="h-8 text-xs" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Aggregate</Label>
+              <Select value={aggregate} onValueChange={setAggregate}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {AGGREGATES.map((a) => (
+                    <SelectItem key={a} value={a}>{a.toUpperCase()}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <Button size="sm" onClick={handleCreate} disabled={createChart.isPending}>
+            <Plus className="h-3 w-3 mr-1" /> Create & Push to Dashboard
           </Button>
-        )}
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-12">#</TableHead>
-              <TableHead>Field Name</TableHead>
-              <TableHead className="w-32">Type</TableHead>
-              <TableHead className="w-24 text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {fields.map((field, index) => (
-              <TableRow key={field.id}>
-                <TableCell className="text-muted-foreground">{index + 1}</TableCell>
-                <TableCell>
-                  {editingId === field.id ? (
-                    <Input
-                      value={editFieldName}
-                      onChange={(e) => setEditFieldName(e.target.value)}
-                      className="h-8"
-                      autoFocus
-                    />
-                  ) : (
-                    field.field_name
-                  )}
-                </TableCell>
-                <TableCell>
-                  {editingId === field.id ? (
-                    <Select value={editFieldType} onValueChange={(v) => setEditFieldType(v as CustomFieldType)}>
-                      <SelectTrigger className="h-8">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {FIELD_TYPES.map((t) => (
-                          <SelectItem key={t.value} value={t.value}>
-                            {t.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <span className="capitalize">{field.field_type}</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-right">
-                  {editingId === field.id ? (
-                    <div className="flex gap-1 justify-end">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleEdit(field.id)}>
-                        <Check className="h-4 w-4" />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium">Existing Charts</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground text-center py-8">Loading...</p>
+          ) : !charts || charts.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No custom charts yet</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Title</TableHead>
+                  <TableHead className="text-xs">Type</TableHead>
+                  <TableHead className="text-xs">Source</TableHead>
+                  <TableHead className="text-xs">Group By</TableHead>
+                  <TableHead className="text-xs">Active</TableHead>
+                  <TableHead className="text-xs text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {charts.map((c) => (
+                  <TableRow key={c.id}>
+                    <TableCell className="text-xs font-medium">{c.title}</TableCell>
+                    <TableCell><Badge variant="outline" className="text-xs">{c.chart_type}</Badge></TableCell>
+                    <TableCell className="text-xs">{c.data_source}</TableCell>
+                    <TableCell className="text-xs">{c.group_by || '—'}</TableCell>
+                    <TableCell>
+                      <Switch checked={c.is_active} onCheckedChange={() => handleToggle(c.id, c.is_active)} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(c.id)}>
+                        <Trash2 className="h-3 w-3" />
                       </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingId(null)}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-1 justify-end">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => startEdit(field)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => handleDelete(field.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-            {isAdding && (
-              <TableRow>
-                <TableCell className="text-muted-foreground">{fields.length + 1}</TableCell>
-                <TableCell>
-                  <Input
-                    value={newFieldName}
-                    onChange={(e) => setNewFieldName(e.target.value)}
-                    placeholder="Enter field name"
-                    className="h-8"
-                    autoFocus
-                  />
-                </TableCell>
-                <TableCell>
-                  <Select value={newFieldType} onValueChange={(v) => setNewFieldType(v as CustomFieldType)}>
-                    <SelectTrigger className="h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {FIELD_TYPES.map((t) => (
-                        <SelectItem key={t.value} value={t.value}>
-                          {t.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex gap-1 justify-end">
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleAdd}>
-                      <Check className="h-4 w-4" />
-                    </Button>
-                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setIsAdding(false)}>
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-            {fields.length === 0 && !isAdding && (
-              <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                  No custom fields yet. Click "Add Field" to create one.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
