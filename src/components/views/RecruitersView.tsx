@@ -4,6 +4,8 @@ import { RecruiterWeeklyTable } from '@/components/dashboard/RecruiterWeeklyTabl
 import { EditableTarget } from '@/components/dashboard/EditableTarget';
 import { DataTable } from '@/components/dashboard/DataTable';
 import { TableSkeleton, KPICardsSkeleton } from '@/components/dashboard/LoadingSkeletons';
+import { CustomFieldsDisplay } from '@/components/dashboard/CustomFieldsDisplay';
+import { ExportPDFButton } from '@/components/shared/ExportPDFButton';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -11,6 +13,9 @@ import { Settings2 } from 'lucide-react';
 import { useRecruiterKPIs } from '@/hooks/useRecruiterKPIs';
 import { useKPITargets, useUpdateKPITarget } from '@/hooks/useKPITargets';
 import { useRecruiterActivities } from '@/hooks/useActivities';
+import { useExportPDF } from '@/hooks/useExportPDF';
+import { useDateRange } from '@/contexts/DateRangeContext';
+import { format } from 'date-fns';
 
 interface ActivityRow {
   id: string;
@@ -34,6 +39,8 @@ const KPI_NAMES = [
 
 export function RecruitersView() {
   const [targetsOpen, setTargetsOpen] = useState(false);
+  const { startDate, endDate } = useDateRange();
+  const { exportToPDF } = useExportPDF();
   
   const { data: kpiData, isLoading: kpisLoading } = useRecruiterKPIs();
   const { data: targets = [], isLoading: targetsLoading } = useKPITargets('Recruiter');
@@ -51,7 +58,15 @@ export function RecruitersView() {
     await updateTarget.mutateAsync({ id, target_value: value });
   };
 
-  // Transform activities for table with new columns
+  const handleExport = () => {
+    const dateRange = `${format(startDate, 'MMM d')} - ${format(endDate, 'MMM d, yyyy')}`;
+    const rows = kpiData?.recruiters?.map(r => 
+      `<tr><td>${r.recruiterName}</td><td style="text-align:right">${r.openPositions}</td><td style="text-align:right">${r.amSubmissions}</td><td style="text-align:right">${r.interviews}</td><td style="text-align:right">${r.hired}</td></tr>`
+    ).join('') || '';
+    const content = `<h2 style="font-size:16px;">Recruiter KPIs</h2><table><tr><th>Recruiter</th><th>Open Pos.</th><th>AM Subs</th><th>Interviews</th><th>Hired</th></tr>${rows}</table>`;
+    exportToPDF('Recruiter Performance', dateRange, content);
+  };
+
   const tableData: ActivityRow[] = activities?.map(a => ({
     id: a.id,
     date: a.activity_date,
@@ -80,105 +95,64 @@ export function RecruitersView() {
           <h1 className="text-2xl font-bold text-foreground">Recruiter Performance</h1>
           <p className="text-muted-foreground">Weekly KPI tracking and targets</p>
         </div>
-        <Dialog open={targetsOpen} onOpenChange={setTargetsOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Settings2 className="h-4 w-4 mr-2" />
-              Edit Targets
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit Weekly Targets</DialogTitle>
-            </DialogHeader>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>KPI</TableHead>
-                  <TableHead className="text-right">Target</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {KPI_NAMES.map((name) => {
-                  const target = getTarget(name);
-                  const isPercent = name === 'Job Coverage Ratio';
-                  return (
-                    <TableRow key={name}>
-                      <TableCell>{name}</TableCell>
-                      <TableCell className="text-right">
-                        <EditableTarget
-                          value={target.value}
-                          format={isPercent ? 'percentage' : 'number'}
-                          onSave={(value) => target.id && handleTargetUpdate(target.id, value)}
-                          disabled={!target.id}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <ExportPDFButton onClick={handleExport} />
+          <Dialog open={targetsOpen} onOpenChange={setTargetsOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Settings2 className="h-4 w-4 mr-2" />
+                Edit Targets
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Edit Weekly Targets</DialogTitle></DialogHeader>
+              <Table>
+                <TableHeader>
+                  <TableRow><TableHead>KPI</TableHead><TableHead className="text-right">Target</TableHead></TableRow>
+                </TableHeader>
+                <TableBody>
+                  {KPI_NAMES.map((name) => {
+                    const target = getTarget(name);
+                    const isPercent = name === 'Job Coverage Ratio';
+                    return (
+                      <TableRow key={name}>
+                        <TableCell>{name}</TableCell>
+                        <TableCell className="text-right">
+                          <EditableTarget value={target.value} format={isPercent ? 'percentage' : 'number'} onSave={(value) => target.id && handleTargetUpdate(target.id, value)} disabled={!target.id} />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      {/* KPI Summary Cards */}
       {isLoading ? (
         <KPICardsSkeleton count={6} />
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <KPIProgressCard
-            title="Open Positions"
-            value={kpiData?.summary.totalOpenPositions || 0}
-            target={getTarget('Open Positions Worked On').value}
-          />
-          <KPIProgressCard
-            title="Job Coverage"
-            value={kpiData?.summary.avgJobCoverageRatio || 0}
-            target={getTarget('Job Coverage Ratio').value}
-            format="percentage"
-          />
-          <KPIProgressCard
-            title="AM Submissions"
-            value={kpiData?.summary.totalAMSubmissions || 0}
-            target={getTarget('AM Submissions').value}
-          />
-          <KPIProgressCard
-            title="EC Submissions"
-            value={kpiData?.summary.totalEndClientSubmissions || 0}
-            target={getTarget('End Client Submissions').value}
-          />
-          <KPIProgressCard
-            title="Interviews"
-            value={kpiData?.summary.totalInterviews || 0}
-            target={getTarget('Interviews').value}
-          />
-          <KPIProgressCard
-            title="Hired"
-            value={kpiData?.summary.totalHired || 0}
-            target={getTarget('Hired').value}
-          />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          <KPIProgressCard title="Open Positions" value={kpiData?.summary.totalOpenPositions || 0} target={getTarget('Open Positions Worked On').value} />
+          <KPIProgressCard title="Job Coverage" value={kpiData?.summary.avgJobCoverageRatio || 0} target={getTarget('Job Coverage Ratio').value} format="percentage" />
+          <KPIProgressCard title="AM Submissions" value={kpiData?.summary.totalAMSubmissions || 0} target={getTarget('AM Submissions').value} />
+          <KPIProgressCard title="EC Submissions" value={kpiData?.summary.totalEndClientSubmissions || 0} target={getTarget('End Client Submissions').value} />
+          <KPIProgressCard title="Interviews" value={kpiData?.summary.totalInterviews || 0} target={getTarget('Interviews').value} />
+          <KPIProgressCard title="Hired" value={kpiData?.summary.totalHired || 0} target={getTarget('Hired').value} />
         </div>
       )}
 
-      {/* Weekly Stats by Recruiter */}
+      <CustomFieldsDisplay department="Recruiter" />
+
       <div className="bg-card rounded-xl border border-border p-5">
         <h3 className="font-semibold mb-4">Weekly Stats by Recruiter</h3>
-        <RecruiterWeeklyTable
-          recruiters={kpiData?.recruiters || []}
-          targets={targets}
-          isLoading={isLoading}
-        />
+        <RecruiterWeeklyTable recruiters={kpiData?.recruiters || []} targets={targets} isLoading={isLoading} />
       </div>
 
-      {/* Daily Activity Report */}
       <div>
         <h3 className="font-semibold mb-4">Daily Activity Report</h3>
-        {activitiesLoading ? (
-          <TableSkeleton rows={6} />
-        ) : (
-          <DataTable columns={activityColumns} data={tableData} keyField="id" />
-        )}
+        {activitiesLoading ? <TableSkeleton rows={6} /> : <DataTable columns={activityColumns} data={tableData} keyField="id" />}
       </div>
     </div>
   );
